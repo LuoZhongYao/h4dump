@@ -38,6 +38,7 @@ struct hci_sco_hdr {
 static int open_channel(uint16_t index)
 {
 	int fd;
+	int on = 1;
 	struct sockaddr_hci addr;
 
 	printf("Opening user channel for hci%u\n", index);
@@ -52,6 +53,12 @@ static int open_channel(uint16_t index)
 	addr.hci_family = AF_BLUETOOTH;
 	addr.hci_dev = index;
 	addr.hci_channel = HCI_CHANNEL_USER;
+
+	if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) < 0) {
+		close(fd);
+		perror("setsockopt");
+		return -1;
+	}
 
 	if (bind(fd, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
 		close(fd);
@@ -116,6 +123,8 @@ int main(void)
 		break;
 		}
 	}
+
+	close(fd);
 
 	return EXIT_SUCCESS;
 }
