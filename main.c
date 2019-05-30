@@ -126,7 +126,7 @@ static void hci_init(int fd)
 	hci_write_local_name(fd, "Wireless controller", 2000);
 	hci_write_inquiry_mode(fd, 2, 2000);
 	hci_write_ext_inquiry_response(fd, 1, (uint8_t*)eir, 2000);
-	hci_write_inquiry_scan_type(fd, 3, 2000);
+	hci_send_cmd(fd, OGF_HOST_CTL, OCF_WRITE_SCAN_ENABLE, 1, (uint8_t [1]){3});
 }
 
 int main(void)
