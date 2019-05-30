@@ -133,7 +133,7 @@ int main(void)
 {
 	int fd;
 	int rsize;
-	uint8_t buf[1024];
+	uint8_t buf[3];
 
 	fd = open_channel(0);
 	if(fd < 0)
