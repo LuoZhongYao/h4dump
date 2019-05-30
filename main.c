@@ -53,7 +53,7 @@ static int open_channel(uint16_t index)
 	memset(&addr, 0, sizeof(addr));
 	addr.hci_family = AF_BLUETOOTH;
 	addr.hci_dev = index;
-	addr.hci_channel = HCI_CHANNEL_USER;
+	addr.hci_channel = HCI_CHANNEL_RAW;//HCI_CHANNEL_USER;
 
 	if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) < 0) {
 		close(fd);
