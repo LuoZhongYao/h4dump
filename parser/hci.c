@@ -4133,7 +4133,7 @@ void hci_dump(int level, struct frame *frm)
 			break;
 
 		p_indent(level, frm);
-		printf("Unknown: type 0x%2.2x len %d\n", type, frm->len);
+		fprintf(stderr, "Unknown: type 0x%2.2x len %d\n", type, frm->len);
 		raw_dump(level, frm);
 		break;
 	}

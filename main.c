@@ -217,7 +217,7 @@ struct context
 	unsigned curn;
 	unsigned readn;
 	struct frame frm;
-	unsigned char buf[1024];
+	unsigned char buf[65535];
 };
 
 #define READ_BYTE(h4, buf, length) \
@@ -262,8 +262,10 @@ static PT_THREAD(h4_process(struct context *c, void *buf, unsigned size))
 		c->curn = 0;
 		READ_BYTE(c, buf, size);
 
-		if (c->buf[0] > HCI_EVENT_PKT)
+		if (c->buf[0] > HCI_EVENT_PKT) {
+			fprintf(stderr, "Invalid package type: %02x\n", c->buf[0]);
 			continue;
+		}
 
 		if (c->buf[0] == HCI_EVENT_PKT)
 			c->in = true;
@@ -273,8 +275,10 @@ static PT_THREAD(h4_process(struct context *c, void *buf, unsigned size))
 		c->readn += h4_pkts[c->buf[0]].hlen;
 		READ_BYTE(c, buf, size);
 		dlen = h4_pkt_len(c->buf, h4_pkts + c->buf[0]);
-        if (dlen == USHRT_MAX)
+        if (dlen > HCI_MAX_FRAME_SIZE) {
+			fprintf(stderr, "Invalid packet\n");
             continue;
+		}
 
         c->readn += dlen;
         READ_BYTE(c, buf, size);
@@ -309,11 +313,14 @@ static int process_frames(int tx, int rx, int btsnoop)
 	int nfds = 0;
 	unsigned char buf[1024];
 	struct pollfd fds[2];
-	struct context ctx[2];
+	struct context *ctx[2];
 	struct context *c;
 
+	ctx[0] = calloc(sizeof(struct context), 1);
+	ctx[1] = calloc(sizeof(struct context), 1);
+
 	if (tx != -1) {
-		context_init(ctx + 0, tx, btsnoop, false);
+		context_init(ctx[0], tx, btsnoop, false);
 		fds[nfds].events = POLLIN;
 		fds[nfds].revents = 0;
 		fds[nfds].fd = tx;
@@ -321,7 +328,7 @@ static int process_frames(int tx, int rx, int btsnoop)
 	}
 
 	if (rx != -1) {
-		context_init(ctx + 1, rx, btsnoop, true);
+		context_init(ctx[1], rx, btsnoop, true);
 		fds[nfds].events = POLLIN;
 		fds[nfds].revents = 0;
 		fds[nfds].fd = rx;
@@ -339,10 +346,10 @@ static int process_frames(int tx, int rx, int btsnoop)
 			} else if (fds[i].revents & POLLIN) {
 				int rn;
 				int fd = fds[i].fd;
-				if (fd == ctx[0].fd) {
-					c = ctx + 0;
-				} else if (fd == ctx[1].fd) {
-					c = ctx + 1;
+				if (fd == ctx[0]->fd) {
+					c = ctx[0];
+				} else if (fd == ctx[1]->fd) {
+					c = ctx[1];
 				}
 
 				rn = read(fd, buf, sizeof(buf));
