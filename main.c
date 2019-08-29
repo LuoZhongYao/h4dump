@@ -207,7 +207,7 @@ static int uart_open(const char *dev, int speed)
 	if (dev == NULL)
 		return -1;
 
-	fd = open(dev, O_RDWR | O_NOCTTY);
+	fd = open(dev, O_RDWR | O_NOCTTY | O_NONBLOCK);
 	if (fd < 0) {
 		perror(dev);
 		exit(1);
@@ -585,6 +585,9 @@ quit:
 		close(rx);
 	if (btsnoop >= 0)
 		close(btsnoop);
+
+	free(ctx[0]);
+	free(ctx[1]);
 
 	return 0;
 }
