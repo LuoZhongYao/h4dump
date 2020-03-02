@@ -31,6 +31,7 @@
 #define HCI_MAX_FRAME_SIZE  (HCI_MAX_ACL_SIZE + 4)
 static const uint64_t BTSNOOP_EPOCH_DELTA = 0x00dcddb30f2f8000ULL;
 static bool use_h5 = false;
+static bool h4_save = false;
 //static bool use_h5_btsnoop = false;
 
 static const struct h4_pkt_match {
@@ -85,7 +86,7 @@ static int btsnoop_create(const char *file)
 		perror(file);
 		exit(1);
 	}
-	if (use_h5)
+	if (use_h5 && !h4_save)
 		write(fd, "btsnoop\0\0\0\0\1\0\0\x3\xec", 16);
 	else
 		write(fd, "btsnoop\0\0\0\0\1\0\0\x3\xea", 16);
@@ -407,6 +408,9 @@ static inline void hci_3wire_recv_frame(struct context *c)
 frmdump:
 		c->buf[3] = H5_HDR_PKT_TYPE(c->buf);
 
+		if (c->btsnoop != -1 && h4_save) {
+			btsnoop_write(c->btsnoop, c->buf + 3, c->readn - 3, c->in);
+		}
         c->frm.in = c->in;
         c->frm.data_len = c->readn - 3;
 		c->frm.data = c->buf + 3;
@@ -504,7 +508,7 @@ again:
 
 		hci_3wire_recv_frame(c);
 
-		if (c->btsnoop != -1) {
+		if (c->btsnoop != -1 && !h4_save) {
 			btsnoop_write(c->btsnoop, c->h5b, c->h5n, c->in);
 		}
 	}
@@ -594,7 +598,15 @@ quit:
 
 static void usage(void)
 {
-	printf("usage: btuart -w {btsnoop} -r {rx} -t {tx} -b {baudrate} -5 -h\n");
+	printf("usage: btuart -w {btsnoop} -r {rx} -t {tx} -b {baudrate} -5 -4 -h\n"
+			"      -w {file}     write the dump data to the {file}\n"
+			"      -r {dev}      monitor the serial port receiving data\n"
+			"      -t {uart}     monitor the serial port that sends data\n"
+			"      -b {baudate}  serial buad rate\n"
+			"      -4            when the captured data is not H4 protocol\n"
+			"                    use H4 protocol to save the data\n"
+			"      -5            use h5 protocol\n"
+			"      -h            display the message\n");
 	exit(1);
 }
 
@@ -604,13 +616,14 @@ int main(int argc, char **argv)
 	unsigned long flags = 0, filter = 0;
 	const char *rx_file = NULL, *tx_file = NULL, *btsnoop_file = NULL;
 
-	while (-1 != (c = getopt(argc, argv, "r:t:b:w:h5"))) {
+	while (-1 != (c = getopt(argc, argv, "r:t:b:w:h54"))) {
 		switch (c) {
 			 case 'r': rx_file = optarg; break;
 			 case 't': tx_file = optarg; break;
 			 case 'b': speed = strtol(optarg, NULL, 0); break;
 			 case 'w': btsnoop_file = optarg; break;
 			 case '5': use_h5 = true; break;
+			 case '4': h4_save = true; break;
 			 case 'h':
 			 default:
 				usage();
