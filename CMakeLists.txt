@@ -4,6 +4,7 @@ set(CMAKE_C_FLAGS "-g -fsanitize=address")
 
 add_executable(btuart
 	main.c
+	baudrate.c
 	parser/amp.c
 	parser/att.c
 	parser/avctp.c

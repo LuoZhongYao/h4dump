@@ -4,13 +4,15 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
-#include <termios.h>
 #include <poll.h>
 #include <stdbool.h>
 #include <getopt.h>
+#include <sys/ioctl.h>
 #include <limits.h>
+#include <termios.h>
 #include "pt-1.4/pt.h"
 #include "parser/parser.h"
+#include "baudrate.h"
 
 #define HCI_COMMAND_PKT     0x01
 #define HCI_ACLDATA_PKT     0x02
@@ -185,24 +187,35 @@ static speed_t tty_get_speed(int speed)
 #define _(n) case n: return B ##n
 	switch (speed) {
 		_(9600); break;
+		_(19200); break;
 		_(38400); break;
+		_(57600); break;
 		_(115200); break;
 		_(230400); break;
 		_(460800); break;
+		_(500000); break;
 		_(576000); break;
 		_(921600); break;
 		_(1000000); break;
 		_(1152000); break;
 		_(1500000); break;
 		_(2000000); break;
+		_(2500000); break;
+		_(3000000); break;
+		_(3500000); break;
+		_(4000000); break;
+	default:
+		fprintf(stderr, "Not support %d\n", speed);
+	break;
 	}
 #undef _
-	return speed;
+	return -1;
 }
 
 static int uart_open(const char *dev, int speed)
 {
 	int fd;
+	speed_t baudrate;
 	struct termios ti;
 
 	if (dev == NULL)
@@ -233,8 +246,11 @@ static int uart_open(const char *dev, int speed)
 	else
 		ti.c_cflag &= ~PARENB;
 	ti.c_cc[VMIN] = 1;
-	cfsetispeed(&ti, tty_get_speed(speed));
-	cfsetospeed(&ti, tty_get_speed(speed));
+	baudrate = tty_get_speed(speed);
+	if (baudrate != -1) {
+		cfsetispeed(&ti, baudrate);
+		cfsetospeed(&ti, baudrate);
+	}
 
 	if (tcsetattr(fd, TCSANOW, &ti) < 0) {
 		perror("set port settings");
@@ -242,6 +258,12 @@ static int uart_open(const char *dev, int speed)
 	}
 
 	tcflush(fd, TCIOFLUSH);
+	if (baudrate == -1) {
+		if (set_baudrate(fd, speed)) {
+			perror("set baudrate");
+			exit(1);
+		}
+	}
 
 	return fd;
 }
