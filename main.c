@@ -8,6 +8,7 @@
 #include <stdbool.h>
 #include <getopt.h>
 #include <sys/ioctl.h>
+#include <linux/serial.h>
 #include <limits.h>
 #include <termios.h>
 #include "pt-1.4/pt.h"
@@ -217,6 +218,7 @@ static int uart_open(const char *dev, int speed)
 	int fd;
 	speed_t baudrate;
 	struct termios ti;
+	struct serial_struct serial;
 
 	if (dev == NULL)
 		return -1;
@@ -246,6 +248,7 @@ static int uart_open(const char *dev, int speed)
 	else
 		ti.c_cflag &= ~PARENB;
 	ti.c_cc[VMIN] = 1;
+	ti.c_cc[VTIME] = 0;
 	baudrate = tty_get_speed(speed);
 	if (baudrate != -1) {
 		cfsetispeed(&ti, baudrate);
@@ -262,6 +265,13 @@ static int uart_open(const char *dev, int speed)
 		if (set_baudrate(fd, speed)) {
 			perror("set baudrate");
 			exit(1);
+		}
+	}
+
+	if (ioctl(fd, TIOCGSERIAL, &serial) == 0) {
+		serial.flags |= ASYNC_LOW_LATENCY;
+		if (ioctl(fd, TIOCSSERIAL, &serial)) {
+			perror("set serial");
 		}
 	}
 
@@ -325,7 +335,7 @@ static PT_THREAD(h4_process(struct context *c, void *buf, unsigned size))
 		c->curn = 0;
 		READ_BYTE(c, buf, size);
 
-		if (c->buf[0] > HCI_EVENT_PKT) {
+		if (c->buf[0] > HCI_EVENT_PKT || c->buf[0] < HCI_COMMAND_PKT) {
 			fprintf(stderr, "(%s) Invalid package type: %02x\n", c->in ? "RX" : "TX", c->buf[0]);
 			continue;
 		}
