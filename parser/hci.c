@@ -1002,11 +1002,11 @@ static inline void link_key_reply_dump(int level, struct frame *frm)
 	p_indent(level, frm);
 	p_ba2str(&cp->bdaddr, addr);
 	printf("bdaddr %s key ", addr);
-	for (i = 0; i < 16; i++)
+	for (i = 15; i >= 0; i--)
 		if (parser.flags & DUMP_NOVENDOR)
 			printf("**");
 		else
-			printf("%2.2X", cp->link_key[i]);
+			printf(" %2.2X", cp->link_key[i]);
 	printf("\n");
 }
 
@@ -1338,11 +1338,11 @@ static inline void return_link_keys_dump(int level, struct frame *frm)
 
 		p_indent(level, frm);
 		printf("bdaddr %s key ", addr);
-		for (i = 0; i < 16; i++)
+		for (i = 15; i >=0 ; i--)
 			if (parser.flags & DUMP_NOVENDOR)
 				printf("**");
 			else
-				printf("%2.2X", key[i]);
+				printf(" %2.2X", key[i]);
 		printf("\n");
 
 		frm->ptr += 2;
@@ -3281,11 +3281,11 @@ static inline void link_key_notify_dump(int level, struct frame *frm)
 	p_indent(level, frm);
 	p_ba2str(&evt->bdaddr, addr);
 	printf("bdaddr %s key ", addr);
-	for (i = 0; i < 16; i++)
+	for (i = 15; i >= 0; i--)
 		if (parser.flags & DUMP_NOVENDOR)
 			printf("**");
 		else
-			printf("%2.2X", evt->link_key[i]);
+			printf(" %2.2X", evt->link_key[i]);
 	printf(" type %d\n", evt->key_type);
 
 	p_indent(level, frm);

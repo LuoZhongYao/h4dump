@@ -132,57 +132,6 @@ static void btsnoop_write(int fd, const uint8_t *buf, unsigned length, bool is_r
 	write(fd, buf, length);
 }
 
-#if 0
-static void btsnoop_write(int fd, const uint8_t *buf, bool is_received)
-{
-	int length;
-	int flags;
-	int drops = 0;
-	int length_he = 0;
-	int type = buf[0];
-	const uint8_t *packet = buf + 1;
-
-	switch (type) {
-	case HCI_COMMAND_PKT:
-		length_he = packet[2] + 4;
-		flags = 2;
-	break;
-	case HCI_ACLDATA_PKT:
-		length_he = (packet[3] << 8) + packet[2] + 5;
-		flags = is_received;
-	break;
-	case HCI_SCODATA_PKT:
-		length_he = packet[2] + 4;
-		flags = is_received;
-	break;
-	case HCI_EVENT_PKT:
-		length_he = packet[1] + 3;
-		flags = 3;
-	break;
-	default: return ;
-	}
-
-	uint64_t timestamp = btsnoop_timestamp();
-	uint32_t time_hi = timestamp >> 32;
-	uint32_t time_lo = timestamp & 0xFFFFFFFF;
-
-	length = htonl(length_he);
-	flags = htonl(flags);
-	drops = htonl(drops);
-	time_hi = htonl(time_hi);
-	time_lo = htonl(time_lo);
-
-	write(fd, &length, 4);
-	write(fd, &length, 4);
-	write(fd, &flags, 4);
-	write(fd, &drops, 4);
-	write(fd, &time_hi, 4);
-	write(fd, &time_lo, 4);
-	write(fd, &type, 1);
-	write(fd, packet, length_he - 1);
-}
-#endif
-
 static speed_t tty_get_speed(int speed)
 {
 #define _(n) case n: return B ##n
@@ -428,11 +377,11 @@ static inline void hci_3wire_recv_frame(struct context *c)
 	const uint8_t *data;
 	switch (H5_HDR_PKT_TYPE(c->buf)) {
 	case HCI_COMMAND_PKT: 
-		c->frm.in = false;
+		c->in = false;
 		goto frmdump;
 
 	case HCI_EVENT_PKT:
-		c->frm.in = false;
+		c->in = true;
 		goto frmdump;
 
 	case HCI_ACLDATA_PKT:
@@ -635,6 +584,7 @@ static void usage(void)
 			"      -r {dev}      monitor the serial port receiving data\n"
 			"      -t {uart}     monitor the serial port that sends data\n"
 			"      -b {baudate}  serial buad rate\n"
+			"      -v	     dump verbose\n"
 			"      -4            when the captured data is not H4 protocol\n"
 			"                    use H4 protocol to save the data\n"
 			"      -5            use h5 protocol\n"
@@ -648,7 +598,7 @@ int main(int argc, char **argv)
 	unsigned long flags = 0, filter = 0;
 	const char *rx_file = NULL, *tx_file = NULL, *btsnoop_file = NULL;
 
-	while (-1 != (c = getopt(argc, argv, "r:t:b:w:h54"))) {
+	while (-1 != (c = getopt(argc, argv, "vr:t:b:w:h54"))) {
 		switch (c) {
 			 case 'r': rx_file = optarg; break;
 			 case 't': tx_file = optarg; break;
@@ -656,6 +606,7 @@ int main(int argc, char **argv)
 			 case 'w': btsnoop_file = optarg; break;
 			 case '5': use_h5 = true; break;
 			 case '4': h4_save = true; break;
+			 case 'v': flags |= DUMP_VERBOSE; break;
 			 case 'h':
 			 default:
 				usage();
@@ -663,7 +614,7 @@ int main(int argc, char **argv)
 		}
 	}
 
-	init_parser(0, ~0L, 0, 0, -1, -1);
+	init_parser(flags, ~0L, 0, 0, -1, -1);
 	if (!tx_file && !rx_file)
 		usage();
 
