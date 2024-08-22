@@ -23,6 +23,8 @@
 *.release.mak
 compile_flags.txt
 .vscode
+.cache/
+.deps
 build/
 GPATH
 GRTAGS
