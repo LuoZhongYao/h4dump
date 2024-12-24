@@ -24,5 +24,7 @@ usage: btuart -w {btsnoop} -r {rx} -t {tx} -b {baudrate} -5 -4 -h
 ```
 
 ### Hardware connection
+```
 (BT UART RX)	--------------->	(FT232 or other uart device 1 RX)
 (BT UART TX)	---------------> 	(FT232 or other uart device 2 RX)
+```
