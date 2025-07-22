@@ -22,11 +22,10 @@
 #include <inttypes.h>
 #include <stdbool.h>
 #include <errno.h>
-#include <limits.h>
+#include <linux/limits.h>
 #include <sys/stat.h>
-#include <sys/param.h>
 
-// #include <glib.h>
+#include <glib.h>
 
 #include "lib/bluetooth.h"
 #include "lib/uuid.h"
@@ -37,8 +36,8 @@
 #include "src/shared/queue.h"
 #include "src/shared/att.h"
 #include "src/shared/gatt-db.h"
-// #include "src/textfile.h"
-// #include "src/settings.h"
+#include "src/textfile.h"
+#include "src/settings.h"
 #include "bt.h"
 #include "packet.h"
 #include "display.h"
@@ -429,18 +428,6 @@ static struct att_conn_data *att_get_conn_data(struct packet_conn_data *conn)
 	return data;
 }
 
-static int create_filename(char *str, size_t size, const char *fmt, ...)
-{
-	fprintf(stderr, "Not impl %s\n", __func__);
-	return -ENOSYS;
-}
-
-static int btd_settings_gatt_db_load(struct gatt_db *db, const char *filename)
-{
-	fprintf(stderr, "Not impl %s\n", __func__);
-	return -ENOSYS;
-}
-
 static void gatt_load_db(struct gatt_db *db, const char *filename,
 						struct timespec *mtim)
 {
@@ -629,7 +616,7 @@ static void print_chrc(const struct l2cap_frame *frame)
 	print_uuid("    Value UUID", frame->data, frame->size);
 	bt_uuid_from_data(&uuid, frame->data, frame->size);
 
-	// insert_chrc(frame, handle - 1, handle, &uuid, prop, true);
+	insert_chrc(frame, handle - 1, handle, &uuid, prop, true);
 }
 
 static void chrc_read(const struct l2cap_frame *frame)
@@ -2272,14 +2259,13 @@ static void vol_flag_notify(const struct l2cap_frame *frame)
 	print_vcs_flag(frame);
 }
 
-#define g_utf8_validate(a, b, c) (false)
 static char *name2utf8(const uint8_t *name, uint16_t len)
 {
 	char utf8_name[HCI_MAX_NAME_LENGTH + 2];
 	int i;
 
 	if (g_utf8_validate((const char *) name, len, NULL))
-		return strndup((char *) name, len);
+		return g_strndup((char *) name, len);
 
 	len = MIN(len, sizeof(utf8_name) - 1);
 
@@ -2293,9 +2279,9 @@ static char *name2utf8(const uint8_t *name, uint16_t len)
 	}
 
 	/* Remove leading and trailing whitespace characters */
-	strstrip(utf8_name);
+	g_strstrip(utf8_name);
 
-	return strdup(utf8_name);
+	return g_strdup(utf8_name);
 }
 
 static void print_mp_name(const struct l2cap_frame *frame)

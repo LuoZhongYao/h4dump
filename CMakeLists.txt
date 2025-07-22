@@ -3,17 +3,26 @@ cmake_minimum_required(VERSION 3.8)
 project(btuart)
 set(CMAKE_C_FLAGS_DEBUG "-g -fsanitize=address")
 
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(GLIB2 REQUIRED IMPORTED_TARGET glib-2.0)
+
 include_directories(.)
 add_executable(btuart
    main.c
    baudrate.c
    )
 
+target_link_libraries(btuart PRIVATE PkgConfig::GLIB2)
 target_link_libraries(btuart PRIVATE mon)
+
 add_library(mon STATIC
    lib/hci.c
    lib/uuid.c
    lib/bluetooth.c
+   src/log.c
+   src/textfile.c
+   src/settings.c
+   src/shared/log.c
    src/shared/util.c
    src/shared/queue.c
    src/shared/crypto.c
@@ -41,3 +50,5 @@ add_library(mon STATIC
    monitor/sdp.c
    monitor/vendor.c
 )
+target_include_directories(mon PRIVATE ${GLIB2_INCLUDE_DIRS})
+target_compile_definitions(mon PRIVATE STORAGEDIR="/tmp" VERSION="0.0.1")

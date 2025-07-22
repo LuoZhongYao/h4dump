@@ -1585,9 +1585,10 @@ gatt_db_attribute_get_value(struct gatt_db_attribute *attrib)
 
 	if (!bt_uuid_cmp(&characteristic_uuid, &attrib->uuid))
 		return service->attributes[index + 1];
-	else if (!bt_uuid_cmp(&characteristic_uuid,
-				&service->attributes[index - 1]->uuid))
+	else if (service->attributes[index - 1] &&
+		 !bt_uuid_cmp(&characteristic_uuid, &service->attributes[index - 1]->uuid)) {
 		return service->attributes[index];
+	}
 
 	return gatt_db_attribute_get_value(service->attributes[index - 1]);
 }

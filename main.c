@@ -14,6 +14,7 @@
 #include <arpa/inet.h>
 #include "pt-1.4/pt.h"
 #include "monitor/packet.h"
+#include "monitor/display.h"
 #include "src/shared/btsnoop.h"
 #include "baudrate.h"
 
@@ -243,15 +244,18 @@ struct context
 	unsigned char h5b[65535];
 };
 
-#define READ_BYTE(h4, buf, length) \
-    do {\
-        PT_WAIT_UNTIL(&h4->pt, length > 0);\
-        int total = (h4->curn + length < h4->readn) ? length : h4->readn - h4->curn;\
-        memcpy(h4->buf + h4->curn, buf, total);\
-        buf += total; \
-        length -= total; \
-        h4->curn += total;\
-    } while(h4->curn < h4->readn)
+#define READ_BYTE(h4, buf, length)                                                                 \
+	do {                                                                                       \
+		while (h4->curn < h4->readn) {                                                     \
+			PT_WAIT_UNTIL(&h4->pt, length > 0);                                        \
+			int total =                                                                \
+				(h4->curn + length < h4->readn) ? length : h4->readn - h4->curn;   \
+			memcpy(h4->buf + h4->curn, buf, total);                                    \
+			buf += total;                                                              \
+			length -= total;                                                           \
+			h4->curn += total;                                                         \
+		}                                                                                  \
+	} while (0)
 
 static unsigned short h4_pkt_len(const unsigned char *pkt, const struct h4_pkt_match *match)
 {
@@ -278,6 +282,7 @@ static PT_THREAD(h4_process(struct context *c, const void *buf, unsigned size))
 	int rn = 0;
 	unsigned dlen;
 	uint16_t opcode;
+	struct timeval tv;
 
 	PT_BEGIN(&c->pt);
 
@@ -289,23 +294,6 @@ static PT_THREAD(h4_process(struct context *c, const void *buf, unsigned size))
 		if (c->buf[0] > HCI_EVENT_PKT || c->buf[0] < HCI_COMMAND_PKT) {
 			fprintf(stderr, "(%s) Invalid package type: %02x\n", c->in ? "RX" : "TX", c->buf[0]);
 			continue;
-		}
-
-		switch (c->buf[0]) {
-		case HCI_EVENT_PKT:
-			c->in = true;
-			opcode = BTSNOOP_OPCODE_EVENT_PKT;
-			break;
-		case HCI_COMMAND_PKT:
-			c->in = false;
-			opcode = BTSNOOP_OPCODE_COMMAND_PKT;
-			break;
-		case HCI_ACLDATA_PKT:
-			opcode = c->in ? BTSNOOP_OPCODE_ACL_RX_PKT : BTSNOOP_OPCODE_ACL_TX_PKT;
-			break;
-		case HCI_SCODATA_PKT:
-			opcode = c->in ? BTSNOOP_OPCODE_SCO_RX_PKT : BTSNOOP_OPCODE_SCO_TX_PKT;
-			break;
 		}
 
 		c->readn += h4_pkts[c->buf[0]].hlen;
@@ -323,9 +311,25 @@ static PT_THREAD(h4_process(struct context *c, const void *buf, unsigned size))
 			btsnoop_write(c->btsnoop, c->buf, c->readn, c->in);
 		}
 
-		struct timeval tv;
 		gettimeofday(&tv, NULL);
-		packet_monitor(NULL, NULL, 1, opcode, c->buf + 1, c->readn - 1);
+		switch (c->buf[0]) {
+		case HCI_EVENT_PKT:
+			c->in = true;
+			opcode = BTSNOOP_OPCODE_EVENT_PKT;
+			break;
+		case HCI_COMMAND_PKT:
+			c->in = false;
+			opcode = BTSNOOP_OPCODE_COMMAND_PKT;
+			break;
+		case HCI_ACLDATA_PKT:
+			opcode = c->in ? BTSNOOP_OPCODE_ACL_RX_PKT : BTSNOOP_OPCODE_ACL_TX_PKT;
+			break;
+		case HCI_SCODATA_PKT:
+			opcode = c->in ? BTSNOOP_OPCODE_SCO_RX_PKT : BTSNOOP_OPCODE_SCO_TX_PKT;
+			break;
+		}
+
+		packet_monitor(&tv, NULL, 1, opcode, c->buf + 1, c->readn - 1);
 	}
 
 	PT_END(&c->pt);
@@ -389,6 +393,9 @@ static inline void hci_3wire_recv_frame(struct context *c)
 	uint16_t opcode;
 	const uint8_t *data;
 	struct timeval tv;
+	char ident = c->in ? '>' : '<';
+	const char *label = "Unkown";
+
 	gettimeofday(&tv, NULL);
 
 	switch (H5_HDR_PKT_TYPE(c->buf)) {
@@ -410,25 +417,22 @@ static inline void hci_3wire_recv_frame(struct context *c)
 		opcode = c->in ? BTSNOOP_OPCODE_SCO_RX_PKT : BTSNOOP_OPCODE_SCO_TX_PKT;
 		break;
 
-	case HCI_3WIRE_ACK_PKT: printf("[%s] 3wire ack pkt\n", c->in ? "RX" : "TX"); return;
-
+	case HCI_3WIRE_ACK_PKT: label = "ACK"; goto _3wire;
 	case HCI_3WIRE_LINK_PKT:
 		data = c->buf + 4;
-		if (data[0] == 0x01 && data[1] == 0x7e) { /* sync req */
-			printf("[%s] 3wire sync req\n", c->in ? "RX" : "TX");
-		} else if (data[0] == 0x02 && data[1] == 0x7d) { /* sync rsp */
-			printf("[%s] 3wire sync rsp\n", c->in ? "RX" : "TX");
-		} else if (data[0] == 0x03 && data[1] == 0xfc) { /* conf req */
-			printf("[%s] 3wire conf req\n", c->in ? "RX" : "TX");
-		} else if (data[0] == 0x04 && data[1] == 0x7b) { /* conf rsp */
-			printf("[%s] 3wire conf rsp\n", c->in ? "RX" : "TX");
-		} else if (data[0] == 0x05 && data[1] == 0xfa) { /* sleep req */
-			printf("[%s] 3wire sleep req\n", c->in ? "RX" : "TX");
-		} else if (data[0] == 0x06 && data[1] == 0xf9) { /* woken req */
-			printf("[%s] 3wire woken req\n", c->in ? "RX" : "TX");
-		} else if (data[0] == 0x07 && data[1] == 0x78) { /* wakeup req */
-			printf("[%s] 3wire wakeup req\n", c->in ? "RX" : "TX");
+		switch (data[0] << 8 | data[1]) {
+		case 0x017e: label = "Requeset SYNC"; break;
+		case 0x027d: label = "Response SYNC"; break;
+		case 0x03fc: label = "Reqeuset CONF"; break;
+		case 0x047b: label = "Response CONF"; break;
+		case 0x05fa: label = "Wakeup";break;
+		case 0x06f9: label = "Woken"; break;
+		case 0x0778: label = "Sleep"; break;
 		}
+
+	_3wire:
+		printf(COLOR_YELLOW"%c 3-Wire: %s" COLOR_OFF "\n", ident, label);
+		packet_hexdump(c->h5b, c->h5n);
 		return;
 	}
 	c->buf[3] = H5_HDR_PKT_TYPE(c->buf);
@@ -439,19 +443,19 @@ static inline void hci_3wire_recv_frame(struct context *c)
 }
 #define unslip_one_byte(c, ch) ({int var = unslip_one_byte(c, ch); if(var) printf("(c = %d, r = %d)-----> %s:%d\n", c->curn, c-> readn, __func__, __LINE__); var; })
 
-#define READ_BYTE(c, buf, length) \
-		do { \
-			while(c->curn < c->readn) { \
-				uint8_t ch;\
-				PT_WAIT_UNTIL(&c->pt, length > 0);\
-				ch = *buf++; \
-				length--;\
-				c->h5b[c->h5n++] = ch;\
-				if (unslip_one_byte(c, ch) == 1) \
-					goto again; \
-			}\
-		} while(0)
-
+#define READ_BYTE(c, buf, length)                                                                  \
+	do {                                                                                       \
+		while (c->curn < c->readn) {                                                       \
+			uint8_t ch;                                                                \
+			PT_WAIT_UNTIL(&c->pt, length > 0);                                         \
+			ch = *buf++;                                                               \
+			length--;                                                                  \
+			c->h5b[c->h5n++] = ch;                                                     \
+			if (unslip_one_byte(c, ch) == 1) {                                         \
+				goto again;                                                        \
+			}                                                                          \
+		}                                                                                  \
+	} while (0)
 
 static PT_THREAD(h5_process(struct context *c, const void *buf, unsigned size))
 {
@@ -544,8 +548,9 @@ static int process_frames(int tx, int rx, int btsnoop)
 
 	while (1) {
 		int n = poll(fds, nfds, -1), i;
-		if ( n <= 0)
+		if (n <= 0) {
 			continue;
+		}
 
 		for (i = 0;i < nfds;i++) {
 			if (fds[i].revents & (POLLHUP | POLLERR | POLLNVAL)) {
@@ -560,12 +565,15 @@ static int process_frames(int tx, int rx, int btsnoop)
 				}
 
 				rn = read(fd, buf, sizeof(buf));
-				if (rn <= 0)
+				if (rn <= 0) {
 					continue;
-				if (use_h5)
+				}
+
+				if (use_h5) {
 					h5_process(c, buf, rn);
-				else
+				} else {
 					h4_process(c, buf, rn);
+				}
 			}
 		}
 	}
